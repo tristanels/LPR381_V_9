@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- The brief requires the build to produce solve.exe. -->
+    <AssemblyName>solve</AssemblyName>
+    <RootNamespace>LPR381.App</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LPR381.Core\LPR381.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Sample model files ship next to solve.exe so the menu can find them. -->
+    <None Update="samples\*.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

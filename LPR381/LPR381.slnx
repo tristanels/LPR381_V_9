@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="LPR381.Core/LPR381.Core.csproj" />
+  <Project Path="LPR381/LPR381.csproj" />
+  <Project Path="LPR381.Tests/LPR381.Tests.csproj" />
+</Solution>
