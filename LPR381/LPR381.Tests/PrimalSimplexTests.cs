@@ -52,8 +52,8 @@ public class PrimalSimplexTests
 
         // Three pivots plus the final optimal table.
         Assert.Equal(4, result.Steps.Count);
-        Assert.Equal("T-0", result.Steps[0].Tableau.Label);
-        Assert.Equal("T-3", result.Steps[^1].Tableau.Label);
+        Assert.Equal("T-0", Assert.IsType<Tableau>(result.Steps[0].Tableau).Label);
+        Assert.Equal("T-3", Assert.IsType<Tableau>(result.Steps[^1].Tableau).Label);
         Assert.False(result.Steps[^1].HasPivot);
     }
 
@@ -66,9 +66,11 @@ public class PrimalSimplexTests
         Assert.True(first.HasPivot);
         Assert.Equal(3, first.PivotRow);
         Assert.Equal(0, first.PivotColumn);
-        Assert.Equal(50, first.Ratios![1], 9);
-        Assert.Equal(80, first.Ratios[2], 9);
-        Assert.Equal(40, first.Ratios[3], 9);
+
+        double[] ratios = Assert.IsType<double[]>(first.Ratios);
+        Assert.Equal(50, ratios[1], 9);
+        Assert.Equal(80, ratios[2], 9);
+        Assert.Equal(40, ratios[3], 9);
         Assert.Contains("Pivot column x1", first.Narrative);
     }
 

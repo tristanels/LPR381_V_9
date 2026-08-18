@@ -25,6 +25,22 @@ public sealed class VariableSubstitution
 }
 
 /// <summary>
+/// Where one row of the canonical form came from. Sensitivity analysis needs this to map a table row
+/// back to the constraint the user wrote, and to get the sign right for a row that was negated.
+/// </summary>
+/// <param name="Label">Row label in the table, e.g. "1", "2'" or "b3".</param>
+/// <param name="SourceConstraintIndex">Index into the model's constraints, or -1 for a generated bound row.</param>
+/// <param name="OriginalRelation">The relation the user wrote.</param>
+/// <param name="Negated">True when the row was multiplied by -1 (every &gt;= row is).</param>
+/// <param name="LogicalColumn">Column of the slack or excess that starts off basic in this row.</param>
+public sealed record CanonicalRow(
+    string Label,
+    int SourceConstraintIndex,
+    Relation OriginalRelation,
+    bool Negated,
+    int LogicalColumn);
+
+/// <summary>
 /// The starting simplex table plus a plain-language record of how it was built. The brief requires
 /// the canonical form to be displayed before the iterations, so the working is kept, not just the numbers.
 /// </summary>
@@ -34,13 +50,26 @@ public sealed class CanonicalForm
         LinearModel model,
         Tableau initialTableau,
         IReadOnlyList<VariableSubstitution> substitutions,
-        IReadOnlyList<string> steps)
+        IReadOnlyList<string> steps,
+        IReadOnlyList<CanonicalRow> rows,
+        int decisionColumnCount)
     {
         Model = model;
         InitialTableau = initialTableau;
         Substitutions = substitutions;
         Steps = steps;
+        Rows = rows;
+        DecisionColumnCount = decisionColumnCount;
     }
+
+    /// <summary>One entry per constraint row of the table, in table order (row 1 is Rows[0]).</summary>
+    public IReadOnlyList<CanonicalRow> Rows { get; }
+
+    /// <summary>How many of the leading columns belong to decision variables (urs variables take two).</summary>
+    public int DecisionColumnCount { get; }
+
+    /// <summary>The canonical row for a table row index (row 1 of the table is the first constraint).</summary>
+    public CanonicalRow RowOf(int tableauRow) => Rows[tableauRow - Tableau.FirstConstraintRow];
 
     public LinearModel Model { get; }
 
@@ -80,6 +109,14 @@ public sealed class CanonicalForm
 
         return solution;
     }
+
+    /// <summary>
+    /// The tableau column that carries a decision variable. Branch &amp; Bound and the Cutting Plane use
+    /// this to add a bound on a variable; both only ever branch on int/bin variables, which are never
+    /// split across two columns the way an urs variable is.
+    /// </summary>
+    public int ColumnOf(string variableName) =>
+        Substitutions.First(s => s.VariableName == variableName).Terms[0].Column;
 
     /// <summary>Writes the canonical form out as equations, one per row of the starting table.</summary>
     public string Describe()

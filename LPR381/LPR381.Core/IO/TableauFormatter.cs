@@ -1,3 +1,4 @@
+using System.Text;
 using LPR381.Core.Algorithms;
 using LPR381.Core.Models;
 using LPR381.Core.Simplex;
@@ -20,13 +21,36 @@ public static class TableauFormatter
         ArgumentNullException.ThrowIfNull(writer);
         ArgumentNullException.ThrowIfNull(step);
 
-        Tableau tableau = step.Tableau;
+        writer.WriteLine(step.Heading);
+
+        if (step.Tableau is not null)
+        {
+            WriteTable(writer, step, step.Tableau);
+        }
+
+        if (!string.IsNullOrWhiteSpace(step.Body))
+        {
+            writer.WriteLine(step.Body.TrimEnd());
+        }
+
+        if (!string.IsNullOrWhiteSpace(step.Narrative))
+        {
+            writer.WriteLine();
+            foreach (string line in step.Narrative.Split(Environment.NewLine))
+            {
+                writer.WriteLine("  " + line.Trim());
+            }
+        }
+
+        writer.WriteLine();
+    }
+
+    private static void WriteTable(TextWriter writer, IterationStep step, Tableau tableau)
+    {
         bool showRatioColumn = step.Ratios is not null && step.RatioAxis == RatioAxis.Rows;
 
         int[] widths = MeasureColumns(tableau);
         int ratioWidth = Math.Max(step.RatioHeading.Length + 2, MinimumColumnWidth);
-
-        writer.WriteLine(step.Heading);
 
         // Header row.
         writer.Write(new string(' ', LabelWidth));
@@ -89,17 +113,6 @@ public static class TableauFormatter
             writer.Write(new string(' ', offset + widths[step.PivotColumn] - 1));
             writer.WriteLine($"^ pivot column ({tableau.ColumnNames[step.PivotColumn]})");
         }
-
-        if (!string.IsNullOrWhiteSpace(step.Narrative))
-        {
-            writer.WriteLine();
-            foreach (string line in step.Narrative.Split(Environment.NewLine))
-            {
-                writer.WriteLine("  " + line.Trim());
-            }
-        }
-
-        writer.WriteLine();
     }
 
     /// <summary>Each column is made just wide enough for its heading and its widest value.</summary>
@@ -120,5 +133,127 @@ public static class TableauFormatter
         }
 
         return widths;
+    }
+}
+
+/// <summary>
+/// Prints matrices and vectors. The Revised Primal Simplex has to display B-inverse, CBV*B-inverse
+/// and each priced-out column, and the sensitivity operations show the same kind of working.
+/// </summary>
+public static class MatrixFormatter
+{
+    private const int CellWidth = 10;
+
+    /// <summary>Renders a matrix with an optional title and row/column labels.</summary>
+    public static string Matrix(
+        string title,
+        double[,] matrix,
+        IReadOnlyList<string>? rowLabels = null,
+        IReadOnlyList<string>? columnLabels = null)
+    {
+        var text = new StringBuilder();
+        int rows = matrix.GetLength(0);
+        int columns = matrix.GetLength(1);
+        int labelWidth = rowLabels?.Max(label => label.Length) + 2 ?? 4;
+
+        if (title.Length > 0)
+        {
+            text.AppendLine("  " + title);
+        }
+
+        if (columnLabels is not null)
+        {
+            text.Append(new string(' ', labelWidth + 2));
+            foreach (string label in columnLabels)
+            {
+                text.Append(label.PadLeft(CellWidth));
+            }
+
+            text.AppendLine();
+        }
+
+        for (int row = 0; row < rows; row++)
+        {
+            text.Append("  ");
+            text.Append((rowLabels is not null ? rowLabels[row] : string.Empty).PadRight(labelWidth));
+
+            for (int column = 0; column < columns; column++)
+            {
+                text.Append(Num.Format(matrix[row, column]).PadLeft(CellWidth));
+            }
+
+            text.AppendLine();
+        }
+
+        return text.ToString();
+    }
+
+    /// <summary>Renders a vector on one line, with an optional label per entry.</summary>
+    public static string Vector(string title, IReadOnlyList<double> values, IReadOnlyList<string>? labels = null)
+    {
+        var text = new StringBuilder();
+
+        if (title.Length > 0)
+        {
+            text.AppendLine("  " + title);
+        }
+
+        if (labels is not null)
+        {
+            text.Append("    ");
+            foreach (string label in labels)
+            {
+                text.Append(label.PadLeft(CellWidth));
+            }
+
+            text.AppendLine();
+        }
+
+        text.Append("    ");
+        foreach (double value in values)
+        {
+            text.Append(Num.Format(value).PadLeft(CellWidth));
+        }
+
+        text.AppendLine();
+        return text.ToString();
+    }
+
+    /// <summary>Renders a simple table of strings with right-aligned columns.</summary>
+    public static string Table(IReadOnlyList<string> headings, IReadOnlyList<IReadOnlyList<string>> rows)
+    {
+        int[] widths = new int[headings.Count];
+        for (int column = 0; column < headings.Count; column++)
+        {
+            widths[column] = headings[column].Length;
+            foreach (IReadOnlyList<string> row in rows)
+            {
+                widths[column] = Math.Max(widths[column], row[column].Length);
+            }
+
+            widths[column] += 3;
+        }
+
+        var text = new StringBuilder();
+        text.Append("  ");
+        for (int column = 0; column < headings.Count; column++)
+        {
+            text.Append(headings[column].PadLeft(widths[column]));
+        }
+
+        text.AppendLine();
+
+        foreach (IReadOnlyList<string> row in rows)
+        {
+            text.Append("  ");
+            for (int column = 0; column < row.Count; column++)
+            {
+                text.Append(row[column].PadLeft(widths[column]));
+            }
+
+            text.AppendLine();
+        }
+
+        return text.ToString();
     }
 }

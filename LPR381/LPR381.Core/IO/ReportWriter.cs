@@ -13,7 +13,11 @@ public static class ReportWriter
     private const string Divider = "======================================================================";
     private const string ThinDivider = "----------------------------------------------------------------------";
 
-    public static void Write(TextWriter writer, LinearModel model, SolveResult result)
+    public static void Write(
+        TextWriter writer,
+        LinearModel model,
+        SolveResult result,
+        IReadOnlyList<string>? sensitivityLog = null)
     {
         ArgumentNullException.ThrowIfNull(writer);
         ArgumentNullException.ThrowIfNull(model);
@@ -55,6 +59,20 @@ public static class ReportWriter
         }
 
         WriteResult(writer, model, result);
+
+        if (sensitivityLog is { Count: > 0 })
+        {
+            writer.WriteLine(ThinDivider);
+            writer.WriteLine();
+            writer.WriteLine("SENSITIVITY ANALYSIS");
+            writer.WriteLine();
+
+            foreach (string entry in sensitivityLog)
+            {
+                writer.WriteLine(entry);
+                writer.WriteLine();
+            }
+        }
     }
 
     /// <summary>The final answer block: status, z, and a value for every decision variable.</summary>

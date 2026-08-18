@@ -54,7 +54,7 @@ public static class ModelFileParser
             throw new ModelParseException(0, "The input file is empty.");
         }
 
-        (ObjectiveSense sense, double[] objectiveCoefficients) = ParseObjective(lines[0]);
+        (ObjectiveSense sense, double[] objectiveCoefficients, double[] powers) = ParseObjective(lines[0]);
         int variableCount = objectiveCoefficients.Length;
 
         // The sign restriction line is the last line, and is recognisable because every token on it
@@ -83,13 +83,14 @@ public static class ModelFileParser
         Variable[] variables = new Variable[variableCount];
         for (int i = 0; i < variableCount; i++)
         {
-            variables[i] = new Variable($"x{i + 1}", objectiveCoefficients[i], restrictions[i]);
+            variables[i] = new Variable($"x{i + 1}", objectiveCoefficients[i], restrictions[i], powers[i]);
         }
 
         return new LinearModel(sense, variables, constraints);
     }
 
-    private static (ObjectiveSense Sense, double[] Coefficients) ParseObjective((int Number, string Text) line)
+    private static (ObjectiveSense Sense, double[] Coefficients, double[] Powers) ParseObjective(
+        (int Number, string Text) line)
     {
         List<string> tokens = Tokenise(line.Text);
 
@@ -111,12 +112,25 @@ public static class ModelFileParser
         }
 
         double[] coefficients = new double[tokens.Count - 1];
+        double[] powers = new double[tokens.Count - 1];
+
         for (int i = 1; i < tokens.Count; i++)
         {
-            coefficients[i - 1] = ParseNumber(tokens[i], line.Number, $"objective function coefficient {i}");
+            // An objective coefficient may carry an optional ^p suffix for the non-linear bonus
+            // criterion: "+2^2" means the term 2 * x^2. Without it the term is linear.
+            string[] parts = tokens[i].Split('^');
+            coefficients[i - 1] = ParseNumber(parts[0], line.Number, $"objective function coefficient {i}");
+            powers[i - 1] = parts.Length > 1
+                ? ParseNumber(parts[1], line.Number, $"power of objective function term {i}")
+                : 1.0;
+
+            if (parts.Length > 2)
+            {
+                throw new ModelParseException(line.Number, $"'{tokens[i]}' has more than one ^ in it.");
+            }
         }
 
-        return (sense, coefficients);
+        return (sense, coefficients, powers);
     }
 
     private static Constraint ParseConstraint((int Number, string Text) line, int index, int variableCount)

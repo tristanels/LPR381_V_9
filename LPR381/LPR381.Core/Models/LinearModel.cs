@@ -44,12 +44,18 @@ public sealed class LinearModel
     /// <summary>True when every variable is binary - the shape the Knapsack algorithm expects.</summary>
     public bool IsBinaryModel => Variables.All(v => v.SignRestriction == SignRestriction.Binary);
 
+    /// <summary>
+    /// True when any objective term carries a power other than 1, e.g. <c>max +1^2 +3</c> for
+    /// <c>max z = x1^2 + 3x2</c>. Only the Non-Linear solver can handle one of these.
+    /// </summary>
+    public bool IsNonLinear => Variables.Any(v => v.IsNonLinear);
+
     /// <summary>Renders the model back out in readable maths, for the screen and the output file.</summary>
     public string Describe()
     {
         var text = new StringBuilder();
         text.Append(Sense == ObjectiveSense.Max ? "max z = " : "min z = ");
-        text.AppendLine(FormatTerms(Variables.Select(v => v.ObjectiveCoefficient).ToArray()));
+        text.AppendLine(FormatTerms(Variables.Select(v => v.ObjectiveCoefficient).ToArray(), isObjective: true));
 
         for (int i = 0; i < Constraints.Count; i++)
         {
@@ -64,7 +70,7 @@ public sealed class LinearModel
         return text.ToString();
     }
 
-    private string FormatTerms(IReadOnlyList<double> coefficients)
+    private string FormatTerms(IReadOnlyList<double> coefficients, bool isObjective = false)
     {
         var text = new StringBuilder();
 
@@ -82,6 +88,13 @@ public sealed class LinearModel
 
             text.Append(Num.Format(Math.Abs(coefficient)));
             text.Append(Variables[i].Name);
+
+            // A non-linear objective term prints its power, e.g. 2.000x1^2.
+            if (isObjective && Variables[i].IsNonLinear)
+            {
+                text.Append('^');
+                text.Append(Num.Format(Variables[i].ObjectivePower).TrimEnd('0').TrimEnd('.'));
+            }
         }
 
         return text.ToString();

@@ -17,7 +17,13 @@ namespace LPR381.Core.Simplex;
 public static class CanonicalFormBuilder
 {
     /// <summary>One row of the canonical form, still expressed over the original decision variables.</summary>
-    private sealed record WorkingRow(string Label, double[] Coefficients, Relation Relation, double Rhs);
+    private sealed record WorkingRow(
+        string Label,
+        double[] Coefficients,
+        Relation Relation,
+        double Rhs,
+        int SourceConstraintIndex,
+        Relation OriginalRelation);
 
     public static CanonicalForm Build(LinearModel model)
     {
@@ -101,8 +107,19 @@ public static class CanonicalFormBuilder
         List<string> rowLabels = ["z"];
         rowLabels.AddRange(rows.Select(row => row.Label));
 
+        List<CanonicalRow> canonicalRows = [];
+        for (int i = 0; i < rows.Count; i++)
+        {
+            canonicalRows.Add(new CanonicalRow(
+                rows[i].Label,
+                rows[i].SourceConstraintIndex,
+                rows[i].OriginalRelation,
+                rows[i].Relation == Relation.GreaterOrEqual,
+                basis[i + Tableau.FirstConstraintRow]));
+        }
+
         var tableau = new Tableau("T-0", columnNames, rowLabels, values, basis);
-        return new CanonicalForm(model, tableau, substitutions, steps);
+        return new CanonicalForm(model, tableau, substitutions, steps, canonicalRows, decisionColumnCount);
     }
 
     /// <summary>
@@ -191,12 +208,15 @@ public static class CanonicalFormBuilder
             {
                 // An equality is two inequalities: one <= and one >=, labelled 2' and 2".
                 steps.Add($"Constraint {constraint.Name} (=): split into rows {label}' (<=) and {label}\" (>=).");
-                rows.Add(new WorkingRow(label + "'", coefficients, Relation.LessOrEqual, constraint.RightHandSide));
-                rows.Add(new WorkingRow(label + "\"", (double[])coefficients.Clone(), Relation.GreaterOrEqual, constraint.RightHandSide));
+                rows.Add(new WorkingRow(
+                    label + "'", coefficients, Relation.LessOrEqual, constraint.RightHandSide, i, Relation.Equal));
+                rows.Add(new WorkingRow(
+                    label + "\"", (double[])coefficients.Clone(), Relation.GreaterOrEqual, constraint.RightHandSide, i, Relation.Equal));
             }
             else
             {
-                rows.Add(new WorkingRow(label, coefficients, constraint.Relation, constraint.RightHandSide));
+                rows.Add(new WorkingRow(
+                    label, coefficients, constraint.Relation, constraint.RightHandSide, i, constraint.Relation));
             }
         }
 
@@ -212,7 +232,7 @@ public static class CanonicalFormBuilder
 
             double[] coefficients = new double[columnCount];
             coefficients[ColumnOf(model, i)] = 1.0;
-            rows.Add(new WorkingRow($"b{i + 1}", coefficients, Relation.LessOrEqual, 1.0));
+            rows.Add(new WorkingRow($"b{i + 1}", coefficients, Relation.LessOrEqual, 1.0, -1, Relation.LessOrEqual));
         }
 
         return rows;

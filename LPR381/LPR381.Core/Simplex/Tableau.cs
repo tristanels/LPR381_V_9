@@ -86,6 +86,13 @@ public sealed class Tableau
         new(label, ColumnNames, RowLabels, CopyValues(), (int[])Basis.Clone());
 
     /// <summary>
+    /// The same table with different numbers in it. Used by the sensitivity operations, which change
+    /// one cost or one right-hand-side and then re-optimise.
+    /// </summary>
+    public Tableau WithValues(double[,] values, string label) =>
+        new(label, ColumnNames, RowLabels, values, (int[])Basis.Clone());
+
+    /// <summary>
     /// Reads the value of every column out of the table: a basic variable takes the RHS of its row,
     /// a non-basic variable is zero.
     /// </summary>

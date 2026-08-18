@@ -15,6 +15,7 @@ public sealed class MainMenu
     private LinearModel? _model;
     private string? _modelPath;
     private SolveResult? _lastResult;
+    private readonly List<string> _sensitivityLog = [];
 
     public void Run()
     {
@@ -102,6 +103,7 @@ public sealed class MainMenu
         _model = ModelFileParser.ParseFile(path);
         _modelPath = Path.GetFullPath(path);
         _lastResult = null;
+        _sensitivityLog.Clear();
 
         ConsoleHelper.WriteSuccess($"Loaded {_model.Variables.Count} decision variable(s) and {_model.Constraints.Count} constraint(s).");
         Console.WriteLine();
@@ -152,7 +154,7 @@ public sealed class MainMenu
         for (int i = 0; i < solvers.Count; i++)
         {
             ISolver solver = solvers[i];
-            string tag = solver.IsImplemented ? string.Empty : "   [not implemented yet]";
+            string tag = solver.CanSolve(_model!, out _) ? string.Empty : "   [not suited to this model]";
             Console.WriteLine($"  {i + 1}. {solver.Name}{tag}");
             Console.WriteLine($"     {solver.Description}");
         }
@@ -173,13 +175,6 @@ public sealed class MainMenu
         if (!chosen.CanSolve(_model!, out string reason))
         {
             ConsoleHelper.WriteWarning(reason);
-
-            if (!chosen.IsImplemented)
-            {
-                SolveResult placeholder = chosen.Solve(_model!);
-                ConsoleHelper.WriteWarning(placeholder.Message);
-            }
-
             ConsoleHelper.Pause();
             return;
         }
@@ -191,6 +186,7 @@ public sealed class MainMenu
 
         SolveResult result = chosen.Solve(_model!);
         _lastResult = result;
+        _sensitivityLog.Clear();
 
         ConsoleHelper.WriteHeading($"{chosen.Name} - working");
         Console.WriteLine();
@@ -228,8 +224,8 @@ public sealed class MainMenu
         IReadOnlyList<ISensitivityOperation> operations = SensitivityRegistry.All;
         for (int i = 0; i < operations.Count; i++)
         {
-            string tag = operations[i].IsImplemented ? string.Empty : "   [not implemented yet]";
-            Console.WriteLine($"  {i + 1,2}. {operations[i].Name}{tag}");
+            Console.WriteLine($"  {i + 1,2}. {operations[i].Name}");
+            Console.WriteLine($"      {operations[i].Description}");
         }
 
         Console.WriteLine("   0. Back");
@@ -242,10 +238,19 @@ public sealed class MainMenu
         }
 
         ISensitivityOperation operation = operations[choice - 1];
+        ConsoleHelper.WriteHeading(operation.Name);
         Console.WriteLine();
-        Console.WriteLine($"  {operation.Name}: {operation.Description}");
+
+        string output = operation.Execute(_lastResult, new ConsoleSensitivityInput());
+
         Console.WriteLine();
-        Console.WriteLine("  " + operation.Execute(_lastResult).Replace(Environment.NewLine, Environment.NewLine + "  "));
+        Console.WriteLine(output);
+
+        // Kept so option 5 can export the analysis along with the algorithm's working.
+        _sensitivityLog.Add($"{operation.Name}{Environment.NewLine}{new string('-', operation.Name.Length)}" +
+                            $"{Environment.NewLine}{Environment.NewLine}{output}");
+
+        ConsoleHelper.WriteSuccess("This analysis will be included when you export with option 5.");
         ConsoleHelper.Pause();
     }
 
@@ -264,7 +269,7 @@ public sealed class MainMenu
 
         using (var writer = new StreamWriter(path, append: false))
         {
-            ReportWriter.Write(writer, _model, _lastResult);
+            ReportWriter.Write(writer, _model, _lastResult, _sensitivityLog);
         }
 
         ConsoleHelper.WriteSuccess($"Results written to {Path.GetFullPath(path)}");
@@ -287,6 +292,15 @@ public sealed class MainMenu
         Console.WriteLine("      bin bin bin bin bin bin");
         Console.WriteLine();
         Console.WriteLine("  Any number of decision variables and constraints is accepted.");
+        Console.WriteLine("  Lines starting with # or // are ignored, so files can be annotated.");
+        Console.WriteLine();
+        Console.WriteLine("  Non-linear bonus: an objective coefficient may carry a power, e.g.");
+        Console.WriteLine();
+        Console.WriteLine("      max +1^2 +3        means   max z = 1(x1^2) + 3x2");
+        Console.WriteLine("      +1 +1 <=4");
+        Console.WriteLine("      + +");
+        Console.WriteLine();
+        Console.WriteLine("  A model written that way is solved by the Non-Linear solver.");
         ConsoleHelper.Pause();
     }
 
