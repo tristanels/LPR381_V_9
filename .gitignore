@@ -1,0 +1,35 @@
+# Build output
+bin/
+obj/
+build/
+out/
+target/
+
+# Visual Studio / Rider / VS Code
+.vs/
+.idea/
+*.user
+*.suo
+*.userprefs
+.vscode/*
+!.vscode/extensions.json
+
+# NuGet
+packages/
+*.nupkg
+
+# Node
+node_modules/
+
+# Java
+*.class
+*.jar
+
+# Logs & temp
+*.log
+*.tmp
+
+# OS / OneDrive noise
+Thumbs.db
+desktop.ini
+.DS_Store
