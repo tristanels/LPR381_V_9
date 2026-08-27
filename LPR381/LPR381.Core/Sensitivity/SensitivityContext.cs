@@ -155,6 +155,26 @@ public sealed class SensitivityContext
             {
                 text.WriteLine($"    {variable.Name} = {Num.Format(solution[variable.Name])}");
             }
+
+        ///Also display the new decision variables that where added when using "Add a new activity".
+        HashSet<string> originalVariablesNames = 
+        Model.Variables.Select(variables => variables.Name).ToHashSet();
+
+        for (int column = 0; column < run.Tableau.RhsColumn; column++)
+        {
+            string columnName = run.Tableau.ColumnNames[column];
+            if (!columnName.StartsWith("x", StringComparison.OrdinalIgnoreCase) || 
+            originalVariablesNames.Contains(columnName))
+            {
+                continue;
+            }
+            int row = IntegerRules.RowOf(run.Tableau,column);
+            double value = row >= Tableau.FirstConstraintRow 
+            ? run.Tableau.Rhs(row) 
+            : 0.0;
+
+                text.WriteLine($"    {columnName} = {Num.Format(value)}");
+            }
         }
 
         return text.ToString();

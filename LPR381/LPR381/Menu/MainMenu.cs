@@ -196,10 +196,6 @@ public sealed class MainMenu
         {
             ConsoleHelper.WriteSuccess("Solved. Use option 5 to export this working to an output file.");
         }
-        else
-        {
-            ConsoleHelper.WriteWarning(result.Message);
-        }
 
         ConsoleHelper.Pause();
     }

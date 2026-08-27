@@ -129,11 +129,12 @@ public class SensitivityTests
     [Fact]
     public void Adding_an_activity_that_pays_brings_it_into_the_basis()
     {
-        // Worth 10 for one unit of each resource: that beats the shadow prices, so it enters.
-        string output = Run(new AddActivityOperation(), [], [10.0, 1.0, 1.0, 1.0]);
+        // Worth 4 and uses 1 unit of rows 1 and 2, but none of row 3.
+        string output = Run(new AddActivityOperation(), [], [4.0, 1.0, 1.0, 0.0]);
 
         Assert.Contains("prices out as attractive", output);
         Assert.Contains("New solution:", output);
+        Assert.Contains("x3 = 80.000", output);
     }
 
     [Fact]
