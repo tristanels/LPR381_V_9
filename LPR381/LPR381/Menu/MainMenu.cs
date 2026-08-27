@@ -218,6 +218,17 @@ public sealed class MainMenu
             return;
         }
 
+        if (!_lastResult.SupportsSensitivityAnalysis)
+        {
+            ConsoleHelper.WriteWarning(
+                $"Sensitivity analysis is not available for the {_lastResult.AlgorithmName} result. " +
+                "It requires the final optimal simplex table from Primal Simplex or Revised Primal Simplex. " +
+                "Branch & Bound, Cutting Plane and Knapsack B&B produce integer-search results rather than " +
+                "a directly analysable LP basis.");
+            ConsoleHelper.Pause();
+            return;
+        }
+
         ConsoleHelper.WriteHeading("Sensitivity analysis");
         Console.WriteLine();
 

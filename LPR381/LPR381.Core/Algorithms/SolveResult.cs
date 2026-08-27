@@ -134,7 +134,11 @@ public sealed class SolveResult
     public bool IsOptimal => Status == SolutionStatus.Optimal;
 
     /// <summary>True when the answer came from a tableau method, so sensitivity analysis can run on it.</summary>
-    public bool SupportsSensitivityAnalysis => IsOptimal && FinalTableau is not null && CanonicalForm is not null;
+    public bool SupportsSensitivityAnalysis =>
+        IsOptimal &&
+        FinalTableau is not null &&
+        CanonicalForm is not null &&
+        BasisMatrix.ConstraintCount(FinalTableau) == CanonicalForm.Rows.Count;
 
     public static SolveResult Optimal(
         string algorithmName,
