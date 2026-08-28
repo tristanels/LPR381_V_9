@@ -84,6 +84,14 @@ Any number of variables and constraints is accepted. `#` and `//` start a commen
 | 5 | Branch & Bound Knapsack — z/c ranking, fill, left/needed fraction, forced branches | §12 |
 | 6 | Non-Linear (separable) — piecewise linear approximation solved by the Primal Simplex | bonus |
 
+**Bonus criterion — "any non-linear problem, with any algorithm".** Loading a model with a `^` power
+unlocks *every* algorithm in the menu, not just option 6. The lambda method rewrites the curve as an
+ordinary LP first, so whichever algorithm you pick is the one that actually solves it. On
+`nonlinear_integer.txt` that is Primal, Revised, Branch & Bound and Cutting Plane — five of the six
+(Knapsack B&B still needs a pure binary knapsack, and says so). When the non-linear variable is `int`,
+the breakpoints sit on whole numbers and the weights become binary, so the answer is *exact* rather
+than approximated.
+
 Special cases handled: unbounded, infeasible, alternative optima, cycling, and a warning when an
 answer is only the relaxed LP of an integer model. Each algorithm refuses a model it does not suit
 and says why.
@@ -99,8 +107,9 @@ Each analysis is kept and included in the exported output file.
 
 ## Samples
 
-`equality.txt`, `integer.txt`, `knapsack.txt` (the brief's example), `minimisation.txt`,
-`nonlinear.txt`, `santa.txt` (the LP from the module's Excel workbook), `unbounded.txt`.
+`equality.txt`, `integer.txt`, `knapsack.txt` (the brief's example), `minimisation.txt`, `nonlinear.txt`,
+`nonlinear_integer.txt`, `santa.txt` (the LP from the module's Excel workbook), `unbounded.txt`,
+`infeasible.txt`, and four `broken_*.txt` files that each trip a different parser error.
 
 ## Team workflow
 

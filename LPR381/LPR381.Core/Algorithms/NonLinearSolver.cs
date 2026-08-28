@@ -36,10 +36,39 @@ public sealed class NonLinearSolver : ISolver
     /// <summary>Breakpoints per non-linear variable. More segments is more accurate but a wider table.</summary>
     public const int Segments = 5;
 
-    public string Name => "Non-Linear (separable) Solver";
+    /// <summary>
+    /// An int or bin variable gets one breakpoint per whole number, so its range has to stay small
+    /// enough for the table to be readable. Past this it falls back to <see cref="Segments"/>.
+    /// </summary>
+    public const int MaxIntegerBreakpoints = 20;
+
+    /// <summary>The algorithm that solves the approximating LP once the curve has been straightened out.</summary>
+    private readonly ISolver _inner;
+
+    /// <summary>Approximates the curve, then solves the resulting LP with the Primal Simplex.</summary>
+    public NonLinearSolver()
+        : this(new PrimalSimplexSolver())
+    {
+    }
+
+    /// <summary>
+    /// Approximates the curve, then solves the resulting LP with <paramref name="inner"/>. Because the
+    /// lambda method leaves an ordinary LP behind, <i>any</i> algorithm in the program can finish the
+    /// job - which is what the bonus criterion asks for.
+    /// </summary>
+    public NonLinearSolver(ISolver inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        _inner = inner;
+    }
+
+    public string Name =>
+        _inner is PrimalSimplexSolver
+            ? "Non-Linear (separable) Solver"
+            : $"Non-Linear (separable) -> {_inner.Name}";
 
     public string Description =>
-        "Solves a non-linear objective such as x1^2 by piecewise linear approximation, then the Primal Simplex.";
+        $"Solves a non-linear objective such as x1^2 by piecewise linear approximation, then the {_inner.Name}.";
 
     public bool IsImplemented => true;
 
@@ -113,7 +142,8 @@ public sealed class NonLinearSolver : ISolver
 
             steps.Add(IterationStep.Text(
                 $"Breakpoints for {set.VariableName}",
-                $"  Upper bound U = {Num.Format(set.Points[^1])}, {Segments} segment(s).\n" +
+                $"  Upper bound U = {Num.Format(set.Points[^1])}, {set.Points.Count - 1} segment(s)" +
+                (set.WeightsAreBinary ? " on the integer grid, weights are binary.\n" : ".\n") +
                 $"  f({set.VariableName}) = {Num.Format(set.Coefficient)} x {set.VariableName}^{Num.Format(set.Power)}\n\n" +
                 MatrixFormatter.Table(["weight", "breakpoint", "f(breakpoint)"], rows),
                 $"{set.VariableName} = " +
@@ -126,8 +156,26 @@ public sealed class NonLinearSolver : ISolver
             "    " + linear.Describe().Replace(Environment.NewLine, Environment.NewLine + "    "),
             "This LP is what gets solved. Every lambda weight is a normal non-negative decision variable."));
 
-        // The existing Primal Simplex does the actual solving - that is the point of the method.
-        SolveResult inner = new PrimalSimplexSolver().Solve(linear);
+        // Nothing non-linear is left, so any algorithm in the program can take it from here. That is
+        // the bonus criterion: the curve is handled by the model rewrite, not by a special solver.
+        if (!_inner.CanSolve(linear, out string innerReason))
+        {
+            return SolveResult.Failed(
+                Name,
+                SolutionStatus.Error,
+                $"The approximating LP cannot be handed to the {_inner.Name}: {innerReason}",
+                null,
+                steps);
+        }
+
+        steps.Add(IterationStep.Text(
+            $"Handing the LP to the {_inner.Name}",
+            $"    The model above contains no powers, so it is an ordinary LP.\n" +
+            $"    Every algorithm in this program can solve it - here the {_inner.Name} does.",
+            "This is why the bonus criterion is met with any algorithm: the non-linearity is removed " +
+            "by rewriting the model, so no algorithm needs to know anything about curves."));
+
+        SolveResult inner = _inner.Solve(linear);
         steps.AddRange(inner.Steps);
 
         if (!inner.IsOptimal)
@@ -196,7 +244,8 @@ public sealed class NonLinearSolver : ISolver
             steps,
             trueObjective,
             solution,
-            $"Solved by piecewise linear approximation with {Segments} segment(s) per non-linear variable.");
+            $"Solved by piecewise linear approximation with {Segments} segment(s) per non-linear " +
+            $"variable, then the {_inner.Name}.");
     }
 
     /// <summary>The breakpoints and weights standing in for one non-linear variable.</summary>
@@ -207,7 +256,8 @@ public sealed class NonLinearSolver : ISolver
         double Power,
         IReadOnlyList<double> Points,
         IReadOnlyList<double> Values,
-        IReadOnlyList<string> WeightNames);
+        IReadOnlyList<string> WeightNames,
+        bool WeightsAreBinary);
 
     private static IEnumerable<int> NonLinearIndices(LinearModel model) =>
         Enumerable.Range(0, model.Variables.Count).Where(i => model.Variables[i].IsNonLinear);
@@ -267,19 +317,30 @@ public sealed class NonLinearSolver : ISolver
             List<double> values = [];
             List<string> names = [];
 
-            for (int k = 0; k <= Segments; k++)
+            // An int or bin variable only ever lands on a whole number, so put a breakpoint on every
+            // integer in [0, U] and make the weights binary. Exactly one weight can then be 1, which
+            // pins x to a breakpoint - so the answer is exact rather than approximated, and there is
+            // something for Branch & Bound and the Cutting Plane to work on.
+            bool onIntegerGrid = variable.IsDiscrete && upper <= MaxIntegerBreakpoints;
+            int count = onIntegerGrid ? (int)Math.Floor(upper + Num.Epsilon) : Segments;
+
+            for (int k = 0; k <= count; k++)
             {
-                double point = upper * k / Segments;
+                double point = onIntegerGrid ? k : upper * k / Segments;
                 points.Add(point);
                 values.Add(variable.ObjectiveCoefficient * Math.Pow(point, variable.ObjectivePower));
                 names.Add($"L{i + 1}_{k}");
 
                 columns.Add(variables.Count);
-                variables.Add(new Variable(names[k], values[k], SignRestriction.Positive));
+                variables.Add(new Variable(
+                    names[k],
+                    values[k],
+                    onIntegerGrid ? SignRestriction.Binary : SignRestriction.Positive));
             }
 
             breakpoints.Add(new BreakpointSet(
-                i, variable.Name, variable.ObjectiveCoefficient, variable.ObjectivePower, points, values, names));
+                i, variable.Name, variable.ObjectiveCoefficient, variable.ObjectivePower, points, values, names,
+                onIntegerGrid));
             columnsFor.Add(columns);
         }
 

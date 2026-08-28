@@ -1,0 +1,9 @@
+# Bonus criterion, second form: a non-linear model whose variables are integer.
+# max z = x1^2 + 3x2  subject to  x1 + x2 <= 4,  x1 and x2 integer.
+#
+# Because x1 is int, the lambda weights land on whole numbers and become binary,
+# so Branch & Bound and the Cutting Plane can solve this one too - which is what
+# "solve any non-linear problem with ANY algorithm" asks for.
+max +1^2 +3
++1 +1 <=4
+int int

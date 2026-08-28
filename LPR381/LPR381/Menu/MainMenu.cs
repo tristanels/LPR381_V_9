@@ -154,7 +154,12 @@ public sealed class MainMenu
         for (int i = 0; i < solvers.Count; i++)
         {
             ISolver solver = solvers[i];
-            string tag = solver.CanSolve(_model!, out _) ? string.Empty : "   [not suited to this model]";
+
+            // On a non-linear model every algorithm is available, because the lambda method turns it
+            // into an ordinary LP before the chosen algorithm ever sees it.
+            string tag = _model!.IsNonLinear || solver.CanSolve(_model, out _)
+                ? string.Empty
+                : "   [not suited to this model]";
             Console.WriteLine($"  {i + 1}. {solver.Name}{tag}");
             Console.WriteLine($"     {solver.Description}");
         }
@@ -169,6 +174,14 @@ public sealed class MainMenu
         }
 
         ISolver chosen = solvers[choice - 1];
+
+        // Bonus criterion: a non-linear model can be solved with ANY algorithm. The lambda method
+        // rewrites the curve as an ordinary LP first, so whichever algorithm was picked here is the
+        // one that actually solves it.
+        if (_model!.IsNonLinear && chosen is not NonLinearSolver)
+        {
+            chosen = new NonLinearSolver(chosen);
+        }
 
         // CanSolve explains up front why an algorithm does not suit this model, instead of
         // letting it produce a wrong answer.
