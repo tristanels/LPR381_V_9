@@ -1,5 +1,8 @@
 <Solution>
-  <Project Path="LPR381.Core/LPR381.Core.csproj" />
+  <!-- LPR381 (solve.exe) is listed first so it is the default startup project: it is the only
+       runnable one. LPR381.Core is a class library and LPR381.Tests is a test project, and
+       neither can be started with F5. -->
   <Project Path="LPR381/LPR381.csproj" />
+  <Project Path="LPR381.Core/LPR381.Core.csproj" />
   <Project Path="LPR381.Tests/LPR381.Tests.csproj" />
 </Solution>
