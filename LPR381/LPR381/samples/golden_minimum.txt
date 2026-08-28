@@ -1,0 +1,5 @@
+# The same search, minimising instead - the comparison in the algorithm flips.
+# min f(x) = x^2 - 6x + 13 has its minimum at x = 3, where f = 4.
+min x^2 - 6x + 13
+0 <= x <= 10
+tolerance 0.001

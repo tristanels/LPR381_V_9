@@ -150,6 +150,19 @@ public sealed class SolveResult
         Tableau? finalTableau = null) =>
         new(algorithmName, SolutionStatus.Optimal, message, canonicalForm, steps, objectiveValue, variableValues, finalTableau);
 
+    /// <summary>
+    /// An optimal answer that did not come from a tableau. The Golden Section Search works on a curve
+    /// rather than a canonical form, so there is no table and no basis to hand back - which is also
+    /// why <see cref="SupportsSensitivityAnalysis"/> stays false for it.
+    /// </summary>
+    public static SolveResult OptimalWithoutTableau(
+        string algorithmName,
+        IReadOnlyList<IterationStep> steps,
+        double objectiveValue,
+        IReadOnlyDictionary<string, double> variableValues,
+        string message = "Optimal solution found.") =>
+        new(algorithmName, SolutionStatus.Optimal, message, null, steps, objectiveValue, variableValues, null);
+
     public static SolveResult Failed(
         string algorithmName,
         SolutionStatus status,

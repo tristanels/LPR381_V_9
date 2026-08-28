@@ -14,7 +14,6 @@ public static class SolverRegistry
         new RevisedPrimalSimplexSolver(),
         new BranchAndBoundSimplexSolver(),
         new CuttingPlaneSolver(),
-        new KnapsackBranchAndBoundSolver(),
-        new NonLinearSolver()
+        new KnapsackBranchAndBoundSolver()
     ];
 }

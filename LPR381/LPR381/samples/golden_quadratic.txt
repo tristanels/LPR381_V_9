@@ -1,0 +1,5 @@
+# A non-linear objective with an interior peak, so the interval closes in from both sides.
+# max f(x) = 4x - x^2 has its maximum at x = 2, where f = 4.
+max 4x - x^2
+0 <= x <= 5
+tolerance 0.001

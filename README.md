@@ -51,7 +51,9 @@ Simplex first when the RHS is negative, then Primal. Everything else feeds table
 | Branch & Bound Simplex | `TableauOperations.AddConstraint` for each bound, then `SimplexEngine` per node |
 | Cutting Plane | `TableauOperations.AddConstraint` for each Gomory cut, then `SimplexEngine` |
 | Sensitivity "apply a change" | edits one cell of the optimal table, then `SimplexEngine` |
-| Non-Linear | rewrites the model as an LP, then hands it to `PrimalSimplexSolver` |
+
+Golden Section Search is the exception: it works on a curve, not a table, so it shares none of this
+(see below).
 
 Only Knapsack B&B stands apart, because the notes teach it as a ranking algorithm rather than a
 tableau one.
@@ -70,8 +72,23 @@ bin bin bin bin bin bin
 
 Any number of variables and constraints is accepted. `#` and `//` start a comment.
 
-**Non-linear (bonus criterion):** an objective coefficient may carry a power, so `max +1^2 +3` means
-`max z = x1² + 3x2`. Those models go to the Non-Linear solver.
+### Non-linear input format (bonus criterion)
+
+A non-linear model is written a different, shorter way — a function of one variable and the interval
+to search it over:
+
+```
+max 4sin(x)(1 + cos(x))
+0 <= x <= 1.5707963268
+tolerance 0.05
+```
+
+Line 3 is optional and defaults to `0.001`. You may write `+ - * / ^`, brackets, the functions
+`sin cos tan sqrt exp ln log abs` and the constants `pi` and `e`. Multiplication may be left implicit,
+so `4sin(x)(1 + cos(x))` and even the notes' `4sinx(1 + cosx)` both parse.
+
+The program tells the two formats apart on its own: a linear objective line is nothing but signed
+numbers, so a letter on that line means the file is non-linear.
 
 ## Algorithms
 
@@ -82,15 +99,17 @@ Any number of variables and constraints is accepted. `#` and `//` start a commen
 | 3 | Branch & Bound Simplex — depth-first with backtracking, all sub-problems, fathoming, best candidate | §4 |
 | 4 | Cutting Plane — Gomory cuts, fraction split shown per cut | §5 |
 | 5 | Branch & Bound Knapsack — z/c ranking, fill, left/needed fraction, forced branches | §12 |
-| 6 | Non-Linear (separable) — piecewise linear approximation solved by the Primal Simplex | bonus |
+| — | Golden Section Search — for non-linear models; chosen automatically, since it is the only one that fits | §18 |
 
-**Bonus criterion — "any non-linear problem, with any algorithm".** Loading a model with a `^` power
-unlocks *every* algorithm in the menu, not just option 6. The lambda method rewrites the curve as an
-ordinary LP first, so whichever algorithm you pick is the one that actually solves it. On
-`nonlinear_integer.txt` that is Primal, Revised, Branch & Bound and Cutting Plane — five of the six
-(Knapsack B&B still needs a pure binary knapsack, and says so). When the non-linear variable is `int`,
-the breakpoints sit on whole numbers and the weights become binary, so the answer is *exact* rather
-than approximated.
+**Bonus criterion — the non-linear problem.** Load a file in the non-linear format and option 3 goes
+straight to the Golden Section Search; there is no algorithm menu, because none of the tableau methods
+apply to a curve. It places two interior points using the golden ratio conjugate `0.618…`, compares
+`f` at them, throws away the end that cannot hold the optimum, and repeats until the interval is
+narrower than the tolerance. It never differentiates `f` and never builds a table, which is why it
+handles `4sin(x)(1 + cos(x))`.
+
+`golden.txt` is the worked example from §18 of the notes and reproduces it exactly, ending at
+`x = 1.041625`, `f = 5.195991` after 8 iterations.
 
 Special cases handled: unbounded, infeasible, alternative optima, cycling, and a warning when an
 answer is only the relaxed LP of an integer model. Each algorithm refuses a model it does not suit
@@ -107,9 +126,12 @@ Each analysis is kept and included in the exported output file.
 
 ## Samples
 
-`equality.txt`, `integer.txt`, `knapsack.txt` (the brief's example), `minimisation.txt`, `nonlinear.txt`,
-`nonlinear_integer.txt`, `santa.txt` (the LP from the module's Excel workbook), `unbounded.txt`,
-`infeasible.txt`, and four `broken_*.txt` files that each trip a different parser error.
+`equality.txt`, `integer.txt`, `knapsack.txt` (the brief's example), `minimisation.txt`, `santa.txt`
+(the LP from the module's Excel workbook), `unbounded.txt`, `infeasible.txt`, and four `broken_*.txt`
+files that each trip a different parser error.
+
+Non-linear: `golden.txt` (the §18 worked example), `golden_quadratic.txt` (an interior maximum) and
+`golden_minimum.txt` (the same search minimising, so the comparison flips).
 
 ## Team workflow
 

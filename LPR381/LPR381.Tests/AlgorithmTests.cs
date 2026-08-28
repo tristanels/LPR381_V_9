@@ -208,36 +208,6 @@ public class AlgorithmTests
     // ---------- Non-linear bonus ----------
 
     [Fact]
-    public void Non_linear_solver_maximises_x_squared_at_the_bound()
-    {
-        // max z = x1^2 + 3x2 with x1 + x2 <= 4. Pushing everything into x1 gives 16, beating 12.
-        SolveResult result = new NonLinearSolver().Solve(Parse("""
-            max +1^2 +3
-            +1 +1 <=4
-            + +
-            """));
-
-        Assert.Equal(SolutionStatus.Optimal, result.Status);
-        Assert.Equal(4, result.VariableValues!["x1"], 3);
-        Assert.Equal(0, result.VariableValues["x2"], 3);
-        Assert.Equal(16, result.ObjectiveValue, 3);
-    }
-
-    [Fact]
-    public void Non_linear_solver_shows_the_breakpoints_and_the_equivalent_lp()
-    {
-        SolveResult result = new NonLinearSolver().Solve(Parse("""
-            max +1^2 +3
-            +1 +1 <=4
-            + +
-            """));
-
-        Assert.Contains(result.Steps, step => step.Heading.StartsWith("Breakpoints for x1"));
-        Assert.Contains(result.Steps, step => step.Heading == "Equivalent linear model");
-        Assert.Contains(result.Steps, step => step.Heading == "Recovering the answer");
-    }
-
-    [Fact]
     public void Linear_solvers_turn_away_a_non_linear_model()
     {
         LinearModel model = Parse("""
@@ -248,7 +218,7 @@ public class AlgorithmTests
 
         Assert.True(model.IsNonLinear);
         Assert.False(new LPR381.Core.Simplex.PrimalSimplexSolver().CanSolve(model, out string reason));
-        Assert.Contains("Non-Linear solver", reason);
+        Assert.Contains("Golden Section Search", reason);
     }
 
     /// <summary>Checks the 0/1 knapsack answer by trying every combination.</summary>

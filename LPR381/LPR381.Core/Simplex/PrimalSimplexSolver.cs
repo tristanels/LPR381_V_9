@@ -29,7 +29,7 @@ public sealed class PrimalSimplexSolver : ISolver
 
         if (model.IsNonLinear)
         {
-            reason = "This model has a non-linear objective term (a ^ power). Use the Non-Linear solver.";
+            reason = "This model has a non-linear objective term (a ^ power). Write it as a function of one variable and solve it with the Golden Section Search - see sample golden.txt.";
             return false;
         }
 

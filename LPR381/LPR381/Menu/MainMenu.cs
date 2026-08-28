@@ -2,6 +2,7 @@ using LPR381.Core.Algorithms;
 using LPR381.Core.IO;
 using LPR381.Core.Models;
 using LPR381.Core.Sensitivity;
+using LPR381.Core.NonLinear;
 using LPR381.Core.Simplex;
 
 namespace LPR381.App.Menu;
@@ -13,6 +14,13 @@ namespace LPR381.App.Menu;
 public sealed class MainMenu
 {
     private LinearModel? _model;
+
+    /// <summary>
+    /// Set instead of <see cref="_model"/> when the input file holds a one-variable non-linear
+    /// function. Exactly one of the two is ever loaded.
+    /// </summary>
+    private NonLinearModel? _nonLinearModel;
+
     private string? _modelPath;
     private SolveResult? _lastResult;
     private readonly List<string> _sensitivityLog = [];
@@ -100,14 +108,45 @@ public sealed class MainMenu
             path = samples[index - 1];
         }
 
-        _model = ModelFileParser.ParseFile(path);
+        if (!File.Exists(path))
+        {
+            throw new ModelParseException(0, $"Input file not found: {Path.GetFullPath(path)}");
+        }
+
+        // Two input formats share this menu option. The file itself says which it is: a linear
+        // objective is only signed numbers, so a letter on the objective line means it is a function.
+        string[] lines = File.ReadAllLines(path);
+        _model = null;
+        _nonLinearModel = null;
+
+        if (NonLinearFileParser.LooksNonLinear(lines))
+        {
+            _nonLinearModel = NonLinearFileParser.Parse(lines);
+        }
+        else
+        {
+            _model = ModelFileParser.Parse(lines);
+        }
+
         _modelPath = Path.GetFullPath(path);
         _lastResult = null;
         _sensitivityLog.Clear();
 
-        ConsoleHelper.WriteSuccess($"Loaded {_model.Variables.Count} decision variable(s) and {_model.Constraints.Count} constraint(s).");
-        Console.WriteLine();
-        Console.WriteLine(_model.Describe());
+        if (_nonLinearModel is not null)
+        {
+            ConsoleHelper.WriteSuccess(
+                $"Loaded a non-linear model in one variable ({_nonLinearModel.VariableName}).");
+            Console.WriteLine();
+            Console.WriteLine(_nonLinearModel.Describe());
+        }
+        else
+        {
+            ConsoleHelper.WriteSuccess(
+                $"Loaded {_model!.Variables.Count} decision variable(s) and {_model.Constraints.Count} constraint(s).");
+            Console.WriteLine();
+            Console.WriteLine(_model.Describe());
+        }
+
         ConsoleHelper.Pause();
     }
 
@@ -115,6 +154,22 @@ public sealed class MainMenu
     {
         if (!RequireModel())
         {
+            return;
+        }
+
+        if (_nonLinearModel is not null)
+        {
+            // A curve has no canonical form and no starting table - there is nothing to convert.
+            ConsoleHelper.WriteHeading("Model");
+            Console.WriteLine();
+            Console.WriteLine("PROGRAMMING MODEL");
+            Console.WriteLine();
+            Console.WriteLine(_nonLinearModel.Describe());
+            Console.WriteLine();
+            ConsoleHelper.WriteWarning(
+                "This is a non-linear model, so there is no canonical form or starting table. The Golden " +
+                "Section Search works on the function directly, evaluating it inside the interval.");
+            ConsoleHelper.Pause();
             return;
         }
 
@@ -147,6 +202,13 @@ public sealed class MainMenu
             return;
         }
 
+        // A non-linear model has exactly one algorithm that fits it, so there is nothing to choose.
+        if (_nonLinearModel is not null)
+        {
+            SolveNonLinear();
+            return;
+        }
+
         ConsoleHelper.WriteHeading("Choose an algorithm");
         Console.WriteLine();
 
@@ -154,12 +216,7 @@ public sealed class MainMenu
         for (int i = 0; i < solvers.Count; i++)
         {
             ISolver solver = solvers[i];
-
-            // On a non-linear model every algorithm is available, because the lambda method turns it
-            // into an ordinary LP before the chosen algorithm ever sees it.
-            string tag = _model!.IsNonLinear || solver.CanSolve(_model, out _)
-                ? string.Empty
-                : "   [not suited to this model]";
+            string tag = solver.CanSolve(_model!, out _) ? string.Empty : "   [not suited to this model]";
             Console.WriteLine($"  {i + 1}. {solver.Name}{tag}");
             Console.WriteLine($"     {solver.Description}");
         }
@@ -174,14 +231,6 @@ public sealed class MainMenu
         }
 
         ISolver chosen = solvers[choice - 1];
-
-        // Bonus criterion: a non-linear model can be solved with ANY algorithm. The lambda method
-        // rewrites the curve as an ordinary LP first, so whichever algorithm was picked here is the
-        // one that actually solves it.
-        if (_model!.IsNonLinear && chosen is not NonLinearSolver)
-        {
-            chosen = new NonLinearSolver(chosen);
-        }
 
         // CanSolve explains up front why an algorithm does not suit this model, instead of
         // letting it produce a wrong answer.
@@ -213,10 +262,42 @@ public sealed class MainMenu
         ConsoleHelper.Pause();
     }
 
+    /// <summary>
+    /// The bonus criterion. A non-linear model goes straight to the Golden Section Search - it is the
+    /// only algorithm here that works on a curve rather than a table.
+    /// </summary>
+    private void SolveNonLinear()
+    {
+        var solver = new GoldenSectionSolver();
+        SolveResult result = solver.Solve(_nonLinearModel!);
+        _lastResult = result;
+        _sensitivityLog.Clear();
+
+        ConsoleHelper.WriteHeading($"{solver.Name} - working");
+        Console.WriteLine();
+        ReportWriter.Write(Console.Out, _nonLinearModel!, result);
+
+        if (result.IsOptimal)
+        {
+            ConsoleHelper.WriteSuccess("Solved. Use option 5 to export this working to an output file.");
+        }
+
+        ConsoleHelper.Pause();
+    }
+
     private void SensitivityAnalysis()
     {
         if (!RequireModel())
         {
+            return;
+        }
+
+        if (_nonLinearModel is not null)
+        {
+            ConsoleHelper.WriteError(
+                "Sensitivity analysis is defined on a simplex table, and the Golden Section Search does " +
+                "not build one. Load a linear model and solve it with the Primal or Revised Simplex.");
+            ConsoleHelper.Pause();
             return;
         }
 
@@ -276,7 +357,7 @@ public sealed class MainMenu
 
     private void ExportResults()
     {
-        if (_model is null || _lastResult is null)
+        if ((_model is null && _nonLinearModel is null) || _lastResult is null)
         {
             ConsoleHelper.WriteError("There is nothing to export yet. Load a model and solve it first.");
             ConsoleHelper.Pause();
@@ -289,7 +370,14 @@ public sealed class MainMenu
 
         using (var writer = new StreamWriter(path, append: false))
         {
-            ReportWriter.Write(writer, _model, _lastResult, _sensitivityLog);
+            if (_nonLinearModel is not null)
+            {
+                ReportWriter.Write(writer, _nonLinearModel, _lastResult, _sensitivityLog);
+            }
+            else
+            {
+                ReportWriter.Write(writer, _model!, _lastResult, _sensitivityLog);
+            }
         }
 
         ConsoleHelper.WriteSuccess($"Results written to {Path.GetFullPath(path)}");
@@ -314,19 +402,26 @@ public sealed class MainMenu
         Console.WriteLine("  Any number of decision variables and constraints is accepted.");
         Console.WriteLine("  Lines starting with # or // are ignored, so files can be annotated.");
         Console.WriteLine();
-        Console.WriteLine("  Non-linear bonus: an objective coefficient may carry a power, e.g.");
+        Console.WriteLine("  NON-LINEAR (bonus criterion) - a different, shorter format:");
         Console.WriteLine();
-        Console.WriteLine("      max +1^2 +3        means   max z = 1(x1^2) + 3x2");
-        Console.WriteLine("      +1 +1 <=4");
-        Console.WriteLine("      + +");
+        Console.WriteLine("  Line 1      : max or min, then f written in terms of one variable, x.");
+        Console.WriteLine("  Line 2      : the interval to search.");
+        Console.WriteLine("  Line 3      : optional stopping tolerance (default 0.001).");
         Console.WriteLine();
-        Console.WriteLine("  A model written that way is solved by the Non-Linear solver.");
+        Console.WriteLine("      max 4sin(x)(1 + cos(x))");
+        Console.WriteLine("      0 <= x <= 1.5707963268");
+        Console.WriteLine("      tolerance 0.05");
+        Console.WriteLine();
+        Console.WriteLine("  You may write + - * / ^ and brackets, the functions sin cos tan sqrt exp");
+        Console.WriteLine("  ln log abs, and the constants pi and e. A file like this is solved by the");
+        Console.WriteLine("  Golden Section Search. The program tells the two formats apart on its own:");
+        Console.WriteLine("  a linear objective line is only signed numbers, so a letter means non-linear.");
         ConsoleHelper.Pause();
     }
 
     private bool RequireModel()
     {
-        if (_model is not null)
+        if (_model is not null || _nonLinearModel is not null)
         {
             return true;
         }

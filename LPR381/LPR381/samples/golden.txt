@@ -1,0 +1,7 @@
+# Bonus criterion - Golden Section Search (study notes section 18).
+# This is the worked example from the notes:
+#   maximise f(x) = 4sin(x)(1 + cos(x)) on [0, pi/2] with epsilon = 0.05
+# The notes reach x = 1.04162483 rad (about 60 degrees), f = 5.19599088.
+max 4sin(x)(1 + cos(x))
+0 <= x <= 1.5707963268
+tolerance 0.05
