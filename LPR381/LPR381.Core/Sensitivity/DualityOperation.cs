@@ -11,8 +11,9 @@ namespace LPR381.Core.Sensitivity;
 /// the Programming Model has Strong or Weak Duality."
 /// <para>
 /// The dual is built by transposing the model: every constraint becomes a variable and every variable
-/// becomes a constraint. A max primal with &lt;= rows gives a min dual with &gt;= rows, and the other way
-/// round. Constraints are normalised into the right direction first, and an equality becomes two rows.
+/// becomes a constraint. The sign of each dual variable follows the primal constraint relation, while
+/// the relation of each dual constraint follows the primal variable sign restriction. Binary variables
+/// add their LP-relaxation upper-bound rows before dualising.
 /// </para>
 /// <para>
 /// The dual is then solved with the Primal Simplex, and the two objective values are compared:
@@ -85,22 +86,36 @@ public sealed class DualityOperation : SensitivityOperation
         text.AppendLine();
         text.AppendLine("  SHADOW PRICE RELATIONSHIP");
         text.AppendLine();
-        text.AppendLine("    The optimal dual variables are the primal shadow prices - the same numbers seen twice.");
+        text.AppendLine("    For ordinary LP rows, the optimal dual variables correspond to the primal shadow prices.");
         text.AppendLine();
 
         List<IReadOnlyList<string>> rows = [];
-        for (int i = 0; i < dual.Variables.Count && i < context.ConstraintCount; i++)
+        for (int i = 0; i < context.Model.Constraints.Count && i < dual.Variables.Count; i++)
         {
+            Constraint original = context.Model.Constraints[i];
+
+            int[] matchingRows = context.Form.Rows
+                .Select((row, index) => (row, index))
+                .Where(item => item.row.SourceConstraintIndex == i)
+                .Select(item => item.index)
+                .ToArray();
+
+            string shadowPrice = original.Relation == Relation.Equal
+                ? "see split equality rows"
+                : matchingRows.Length == 1
+                    ? Num.Format(context.ConstraintShadowPrices[matchingRows[0]])
+                    : "n/a";
+
             rows.Add(
             [
-                context.Form.Rows[i].Label,
-                Num.Format(context.ConstraintShadowPrices[i]),
+                original.Name,
+                shadowPrice,
                 dual.Variables[i].Name,
                 Num.Format(dualResult.VariableValues![dual.Variables[i].Name])
             ]);
         }
 
-        text.Append(MatrixFormatter.Table(["primal row", "shadow price", "dual variable", "value"], rows));
+        text.Append(MatrixFormatter.Table(["primal constraint", "shadow price", "dual variable", "value"], rows));
 
         if (context.Model.IsIntegerModel)
         {
@@ -113,76 +128,160 @@ public sealed class DualityOperation : SensitivityOperation
     }
 
     /// <summary>
-    /// Transposes the model. Constraints are first normalised into the direction that matches the
-    /// objective (&lt;= for a max, &gt;= for a min), because that is the form the dual is defined on.
+    /// Transposes the model using the standard primal/dual sign rules. The input model is copied so
+    /// the caller's model is never changed. Integer restrictions are relaxed and binary variables add
+    /// their x <= 1 relaxation rows.
     /// </summary>
     public static (LinearModel Dual, List<string> Notes) BuildDual(LinearModel primal)
     {
         ArgumentNullException.ThrowIfNull(primal);
 
-        bool primalIsMax = primal.Sense == ObjectiveSense.Max;
-        Relation wanted = primalIsMax ? Relation.LessOrEqual : Relation.GreaterOrEqual;
+        // Duality is applied to the LP relaxation. Integer restrictions do not change the sign of a
+        // variable, and a binary variable contributes its usual x >= 0 restriction plus the explicit
+        // upper-bound row x <= 1 used by the relaxation in CanonicalFormBuilder.
+        List<Constraint> primalConstraints = primal.Constraints
+            .Select(c => new Constraint(
+                c.Name,
+                c.Coefficients.ToArray(),
+                c.Relation,
+                c.RightHandSide))
+            .ToList();
 
         List<string> notes =
         [
-            primalIsMax
-                ? "The primal is a max, so every constraint is put into <= form and the dual is a min."
-                : "The primal is a min, so every constraint is put into >= form and the dual is a max."
+            primal.Sense == ObjectiveSense.Max
+                ? "The primal is a max, so its dual is a min."
+                : "The primal is a min, so its dual is a max."
         ];
 
-        // Normalise: flip the rows pointing the wrong way, split the equalities.
-        List<(double[] Coefficients, double Rhs, string Source)> rows = [];
-
-        foreach (Constraint constraint in primal.Constraints)
+        for (int i = 0; i < primal.Variables.Count; i++)
         {
-            double[] coefficients = constraint.Coefficients.ToArray();
+            Variable variable = primal.Variables[i];
 
-            if (constraint.Relation == Relation.Equal)
+            if (variable.SignRestriction == SignRestriction.Binary)
             {
-                notes.Add($"{constraint.Name} is an equality, so it becomes two rows (one each way), " +
-                          "which gives it two dual variables.");
-                rows.Add((coefficients, constraint.RightHandSide, constraint.Name + "a"));
-                rows.Add((Negate(coefficients), -constraint.RightHandSide, constraint.Name + "b"));
+                double[] coefficients = new double[primal.Variables.Count];
+                coefficients[i] = 1.0;
+
+                primalConstraints.Add(new Constraint(
+                    $"b{i + 1}",
+                    coefficients,
+                    Relation.LessOrEqual,
+                    1.0));
+
+                notes.Add(
+                    $"{variable.Name} is binary, so the LP relaxation includes the bound " +
+                    $"{variable.Name} <= 1 before dualising.");
             }
-            else if (constraint.Relation != wanted)
+            else if (variable.SignRestriction == SignRestriction.Integer)
             {
-                notes.Add($"{constraint.Name} points the wrong way, so the row is multiplied by -1.");
-                rows.Add((Negate(coefficients), -constraint.RightHandSide, constraint.Name));
-            }
-            else
-            {
-                rows.Add((coefficients, constraint.RightHandSide, constraint.Name));
+                notes.Add(
+                    $"{variable.Name} is integer, so its integrality is relaxed for the dual LP.");
             }
         }
 
-        notes.Add($"Each of the {rows.Count} row(s) becomes a dual variable, and each of the " +
-                  $"{primal.Variables.Count} decision variable(s) becomes a dual constraint.");
-
-        // The dual objective takes the primal right-hand-sides as its coefficients.
+        // Standard dual signs:
+        //   max primal: <= row -> y >= 0, >= row -> y <= 0, = row -> y unrestricted.
+        //   min primal: >= row -> y >= 0, <= row -> y <= 0, = row -> y unrestricted.
         List<Variable> dualVariables = [];
-        for (int i = 0; i < rows.Count; i++)
+        for (int i = 0; i < primalConstraints.Count; i++)
         {
-            dualVariables.Add(new Variable($"y{i + 1}", rows[i].Rhs, SignRestriction.Positive));
+            Constraint constraint = primalConstraints[i];
+            SignRestriction sign = DualVariableSign(primal.Sense, constraint.Relation);
+
+            dualVariables.Add(
+                new Variable($"y{i + 1}", constraint.RightHandSide, sign));
+
+            notes.Add(
+                $"{constraint.Name} ({constraint.RelationSymbol}) becomes dual variable y{i + 1} " +
+                $"with sign restriction {DescribeSign(sign)}.");
         }
 
-        // Each primal variable gives one dual constraint, built from that variable's column.
+        // Standard dual constraint signs depend on the sign restriction of the corresponding primal
+        // variable. Integer and binary variables are non-negative in the LP relaxation.
         List<Constraint> dualConstraints = [];
-        Relation dualRelation = primalIsMax ? Relation.GreaterOrEqual : Relation.LessOrEqual;
-
         for (int j = 0; j < primal.Variables.Count; j++)
         {
-            double[] column = rows.Select(row => row.Coefficients[j]).ToArray();
+            Variable primalVariable = primal.Variables[j];
+
+            double[] column = primalConstraints
+                .Select(constraint => constraint.Coefficients[j])
+                .ToArray();
+
+            Relation relation = DualConstraintRelation(primal.Sense, primalVariable.SignRestriction);
+
             dualConstraints.Add(new Constraint(
-                $"d{j + 1}", column, dualRelation, primal.Variables[j].ObjectiveCoefficient));
+                $"d{j + 1}",
+                column,
+                relation,
+                primalVariable.ObjectiveCoefficient));
+
+            notes.Add(
+                $"{primalVariable.Name} ({DescribeSign(primalVariable.SignRestriction)}) gives dual " +
+                $"constraint d{j + 1} with relation {RelationSymbol(relation)}.");
         }
 
         var dual = new LinearModel(
-            primalIsMax ? ObjectiveSense.Min : ObjectiveSense.Max,
+            primal.Sense == ObjectiveSense.Max ? ObjectiveSense.Min : ObjectiveSense.Max,
             dualVariables,
             dualConstraints);
 
         return (dual, notes);
     }
+
+    private static SignRestriction DualVariableSign(ObjectiveSense primalSense, Relation relation)
+    {
+        if (relation == Relation.Equal)
+        {
+            return SignRestriction.Unrestricted;
+        }
+
+        if (primalSense == ObjectiveSense.Max)
+        {
+            return relation == Relation.LessOrEqual
+                ? SignRestriction.Positive
+                : SignRestriction.Negative;
+        }
+
+        return relation == Relation.GreaterOrEqual
+            ? SignRestriction.Positive
+            : SignRestriction.Negative;
+    }
+
+    private static Relation DualConstraintRelation(ObjectiveSense primalSense, SignRestriction restriction)
+    {
+        bool nonNegative = restriction is SignRestriction.Positive or SignRestriction.Integer or SignRestriction.Binary;
+
+        if (restriction == SignRestriction.Unrestricted)
+        {
+            return Relation.Equal;
+        }
+
+        if (primalSense == ObjectiveSense.Max)
+        {
+            return nonNegative ? Relation.GreaterOrEqual : Relation.LessOrEqual;
+        }
+
+        return nonNegative ? Relation.LessOrEqual : Relation.GreaterOrEqual;
+    }
+
+    private static string DescribeSign(SignRestriction sign) => sign switch
+    {
+        SignRestriction.Positive => ">= 0",
+        SignRestriction.Negative => "<= 0",
+        SignRestriction.Unrestricted => "unrestricted",
+        SignRestriction.Integer => ">= 0 and integer",
+        SignRestriction.Binary => "0 or 1",
+        _ => sign.ToString()
+    };
+
+    private static string RelationSymbol(Relation relation) => relation switch
+    {
+        Relation.LessOrEqual => "<=",
+        Relation.GreaterOrEqual => ">=",
+        Relation.Equal => "=",
+        _ => "?"
+    };
 
     private static double[] Negate(IReadOnlyList<double> values) => values.Select(value => -value).ToArray();
 

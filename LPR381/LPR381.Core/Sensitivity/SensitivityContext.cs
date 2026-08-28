@@ -74,20 +74,15 @@ public sealed class SensitivityContext
     /// <summary>Builds the context, or returns null when the result did not come from a tableau method.</summary>
     public static SensitivityContext? From(SolveResult solved)
     {
-        if (solved is not { IsOptimal: true, FinalTableau: not null, CanonicalForm: not null })
+        if (!solved.SupportsSensitivityAnalysis)
         {
             return null;
         }
 
-        // Branch & Bound and the Cutting Plane end on a table that has extra bound or cut rows, so
-        // B-inverse no longer lines up with the starting basis. Sensitivity analysis is defined on
-        // the LP table, so those results are turned away.
-        if (BasisMatrix.ConstraintCount(solved.FinalTableau) != solved.CanonicalForm.Rows.Count)
-        {
-            return null;
-        }
-
-        return new SensitivityContext(solved.CanonicalForm.Model, solved.CanonicalForm, solved.FinalTableau);
+        return new SensitivityContext(
+            solved.CanonicalForm!.Model,
+            solved.CanonicalForm,
+            solved.FinalTableau!);
     }
 
     /// <summary>Column indices that are currently basic.</summary>
