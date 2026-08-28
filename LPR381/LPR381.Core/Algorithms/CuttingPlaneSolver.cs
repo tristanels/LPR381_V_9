@@ -217,7 +217,7 @@ public sealed class CuttingPlaneSolver : ISolver
 
         for (int column = 0; column < coefficients.Length; column++)
         {
-            double fraction = -coefficients[column];
+            double fraction = -coefficients[column]; 
             if (Num.IsZero(fraction))
             {
                 continue;
@@ -236,6 +236,7 @@ public sealed class CuttingPlaneSolver : ISolver
         text.Append($" >= {Num.Format(rhsFraction)}");
         text.Append("   ->   in canonical form: ");
 
+        // display as cannonical: sum(-f_j * x_j) + slack = -f_b 
         first = true;
         for (int column = 0; column < coefficients.Length; column++)
         {

@@ -1,3 +1,4 @@
+using System.Linq;
 using LPR381.Core.Models;
 
 namespace LPR381.Core.Simplex;
@@ -75,6 +76,13 @@ public static class PivotEngine
         int[] basis = (int[])source.Basis.Clone();
         basis[pivotRow] = pivotColumn;
 
-        return new Tableau(label, source.ColumnNames, source.RowLabels, values, basis);
+        // Update row labels to reflect the new basic variable
+        string[] rowLabels = source.RowLabels.ToArray();
+        if (pivotColumn < source.ColumnNames.Count) 
+            {
+            rowLabels[pivotRow] = source.ColumnNames[pivotColumn];
+        }
+
+        return new Tableau(label, source.ColumnNames, rowLabels, values, basis);
     }
 }

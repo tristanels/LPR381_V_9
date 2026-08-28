@@ -56,14 +56,27 @@ public static class SimplexEngine
             current = dual.Tableau;
             index = dual.NextIndex;
 
-            if (dual.Outcome is PivotOutcome.Infeasible or PivotOutcome.Error)
+            // Dual unbounded means Primal infeasible - stop immediately
+            // Dual infeasible or error also means we cannot continue
+            if (dual.Outcome is PivotOutcome.Unbounded or PivotOutcome.Infeasible or PivotOutcome.Error)
             {
-                return dual with { NextIndex = index };
+                // For Dual unbounded, report as Primal infeasible (the dual of unbounded is infeasible)
+                PivotOutcome finalOutcome = dual.Outcome == PivotOutcome.Unbounded
+                    ? PivotOutcome.Infeasible
+                    : dual.Outcome;
+
+                string message = dual.Outcome == PivotOutcome.Unbounded
+                    ? "The Dual Simplex is unbounded, which means the Primal problem is infeasible. " + dual.Message
+                    : dual.Message;
+
+                return new SimplexRun(finalOutcome, dual.Tableau, message, index);
             }
         }
 
         return RunPhase(new PrimalPivotRule(), sense, current, steps, labelPrefix, index);
     }
+
+         
 
     /// <summary>
     /// Applies one pivot rule until it says to stop, recording every table it pivoted on. The table
