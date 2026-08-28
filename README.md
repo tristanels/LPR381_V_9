@@ -6,26 +6,66 @@ runs sensitivity analysis and duality on the answer, and exports the whole worki
 
 ## Getting started
 
+### What you need first
+
+- **Visual Studio 2026** (Community is free). Earlier versions cannot open a `.slnx` solution.
+- The **.NET 10 SDK**. Visual Studio installs it with the *".NET desktop development"* workload —
+  tick that workload in the installer if you are setting VS up from scratch.
+
+### 1. Clone
+
 ```bash
 git clone https://github.com/tristanels/LPR381_V_9.git
-cd LPR381_V_9
 ```
 
-Open `LPR381/LPR381.slnx` in Visual Studio (set **LPR381** as the startup project), or from the
-command line:
+Or in Visual Studio: **Clone a repository** on the start screen, and paste that URL.
+
+### 2. Open the solution
+
+**File → Open → Project/Solution**, then pick:
+
+```
+LPR381_V_9\LPR381\LPR381.slnx
+```
+
+Open that **file**, not the folder. Opening the folder puts Visual Studio in "folder mode", where
+there is nothing to run.
+
+### 3. Run it
+
+**LPR381** is already the startup project (it shows in **bold** in Solution Explorer). Press
+**Ctrl+F5** — Start Without Debugging, which keeps the console window open when the program exits.
+
+If **LPR381** is not bold, right-click it → **Set as Startup Project**. Do not try to run
+`LPR381.Core` (a class library) or `LPR381.Tests` (a test project); neither can be started, and F5
+on them fails with *"a project with an Output Type of Class Library cannot be started directly"*.
+
+Then pick option **1** and load one of the numbered sample files.
+
+### Without Visual Studio
+
+Double-click **`run.bat`** in the repo root: it builds and runs `solve.exe`. Or from a terminal:
 
 ```bash
 dotnet build LPR381/LPR381.slnx     # builds solve.exe
-dotnet test  LPR381/LPR381.slnx     # runs the unit tests
+dotnet test  LPR381/LPR381.slnx     # runs the unit tests (95 of them)
+dotnet run --project LPR381/LPR381  # builds and runs
 ```
 
 `solve.exe` lands in `LPR381/LPR381/bin/Debug/net10.0/`, with the sample models beside it in `samples/`.
 
-**If the program will not start** and says *"An Application Control policy has blocked this file
-(0x800711C7)"*, that is Windows Smart App Control refusing a freshly built, unsigned DLL.
-`LPR381/Directory.Build.props` already works around it by making each rebuild produce a new file;
-just build again. Failing that, switch Smart App Control off under Windows Security → App & browser
-control (note that turning it off is permanent).
+### If it will not run
+
+| What you see | What it means | Fix |
+| --- | --- | --- |
+| *"A project with an Output Type of Class Library cannot be started directly"* | The startup project is `LPR381.Core` or `LPR381.Tests` | Right-click **LPR381** → Set as Startup Project |
+| *"An Application Control policy has blocked this file (0x800711C7)"* | Windows Smart App Control is refusing a freshly built, unsigned DLL | **Build → Rebuild Solution**, then run again. Each rebuild makes a new file, which clears the block |
+| *"Unable to copy file … being used by another process"* | A `solve.exe` window is still open | Close it, then rebuild |
+| Visual Studio shows no projects, only files | The **folder** was opened instead of the solution | File → Open → Project/Solution → `LPR381\LPR381.slnx` |
+
+The Smart App Control workaround is already set up in `LPR381/Directory.Build.props`, which is why
+rebuilding clears it. If it keeps happening, Smart App Control can be switched off under Windows
+Security → App & browser control — but note that turning it off is permanent.
 
 ## Structure
 
