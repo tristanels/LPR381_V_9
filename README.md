@@ -21,6 +21,12 @@ dotnet test  LPR381/LPR381.slnx     # runs the unit tests
 
 `solve.exe` lands in `LPR381/LPR381/bin/Debug/net10.0/`, with the sample models beside it in `samples/`.
 
+**If the program will not start** and says *"An Application Control policy has blocked this file
+(0x800711C7)"*, that is Windows Smart App Control refusing a freshly built, unsigned DLL.
+`LPR381/Directory.Build.props` already works around it by making each rebuild produce a new file;
+just build again. Failing that, switch Smart App Control off under Windows Security → App & browser
+control (note that turning it off is permanent).
+
 ## Structure
 
 | Project | What lives there |

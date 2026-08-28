@@ -1,0 +1,23 @@
+﻿<Project>
+
+  <!--
+    Applies to every project in this solution.
+
+    Windows Smart App Control (Windows Security > App & browser control) refuses to load freshly
+    built, unsigned DLLs, and its verdict is cached against the file's hash. A normal .NET build is
+    deterministic: the same source always produces byte-identical output, so once a build has been
+    blocked, rebuilding it produces the same file and stays blocked - the app then fails at startup
+    with "An Application Control policy has blocked this file. (0x800711C7)" and no amount of
+    rebuilding clears it.
+
+    Turning determinism off puts a fresh identifier in each build, so every rebuild is a new file
+    that gets judged afresh and the problem clears itself. Reproducible builds are not something
+    this project needs, so this is a safe trade.
+
+    If nobody in the group has Smart App Control switched on, this line can simply be deleted.
+  -->
+  <PropertyGroup>
+    <Deterministic>false</Deterministic>
+  </PropertyGroup>
+
+</Project>
