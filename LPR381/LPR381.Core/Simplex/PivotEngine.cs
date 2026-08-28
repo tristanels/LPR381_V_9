@@ -1,4 +1,3 @@
-using System.Linq;
 using LPR381.Core.Models;
 
 namespace LPR381.Core.Simplex;
@@ -56,18 +55,18 @@ public static class PivotEngine
         for (int row = 0; row < source.RowCount; row++)
         {
             if (row == pivotRow)
-            {
+        {
                 continue;
             }
 
             double factor = source[row, pivotColumn];
             if (Num.IsZero(factor))
-            {
+        {
                 continue;
             }
 
             for (int column = 0; column < columnCount; column++)
-            {
+        {
                 values[row, column] = source[row, column] - (factor * values[pivotRow, column]);
             }
         }
@@ -76,10 +75,11 @@ public static class PivotEngine
         int[] basis = (int[])source.Basis.Clone();
         basis[pivotRow] = pivotColumn;
 
-        // Update row labels to reflect the new basic variable
-        string[] rowLabels = source.RowLabels.ToArray();
-        if (pivotColumn < source.ColumnNames.Count) 
-            {
+        // The row label follows the basis, so the final table can be read straight off:
+        // the row labelled x1 carries x1's value in the RHS column.
+        string[] rowLabels = [.. source.RowLabels];
+        if (pivotColumn < source.ColumnNames.Count)
+        {
             rowLabels[pivotRow] = source.ColumnNames[pivotColumn];
         }
 

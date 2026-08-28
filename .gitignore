@@ -33,3 +33,6 @@ node_modules/
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# Exported run output (option 5) - a run artifact, not source
+output.txt
